@@ -2,21 +2,26 @@
 %%% @author James Aimonetti <james@2600hz.org>
 %%% @copyright (C) 2011, VoIP INC
 %%% @doc
-%%%
+%%% Manage the event listeners for Crossbar clients
 %%% @end
-%%% Created : 15 Mar 2011 by James Aimonetti <james@2600hz.org>
+%%% Created :  4 Sep 2011 by James Aimonetti <james@260hz.org>
 %%%-------------------------------------------------------------------
--module(media_shout_sup).
+-module(cb_events_sup).
 
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, start_shout/5]).
+-export([start_link/0, find_srv/2, start_srv/2]).
 
 %% Supervisor callbacks
 -export([init/1]).
 
+-include_lib("whistle/include/wh_types.hrl").
+
 -define(SERVER, ?MODULE).
+-define(SRV_ID(AccountID, UserID), <<AccountID/binary, "-", UserID/binary>>).
+-define(CHILD(AccountID, UserID), { ?SRV_ID(AccountID, UserID)
+				   ,{cb_events_srv, start_link, [AccountID, UserID]}, temporary, 5000, worker, [cb_events_srv]}).
 
 %%%===================================================================
 %%% API functions
@@ -32,8 +37,24 @@
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-start_shout(Media, To, Type, Port, CallID) ->
-    supervisor:start_child(?SERVER, [Media, To, Type, Port, CallID]).
+-spec start_srv/2 :: (AccountID, UserID) -> sup_startchild_ret() when
+      AccountID :: binary(),
+      UserID :: binary().
+start_srv(AccountID, UserID) when is_binary(AccountID), is_binary(UserID) ->
+    supervisor:start_child(?MODULE, ?CHILD(AccountID, UserID)).
+
+-spec find_srv/2 :: (AccountID, UserID) -> sup_startchild_ret() when
+      AccountID :: binary(),
+      UserID :: binary().
+find_srv(AccountID, UserID) when is_binary(AccountID), is_binary(UserID) ->
+    case [ Pid || {ID, Pid, _, _} <- supervisor:which_children(?MODULE),
+		  ?SRV_ID(AccountID, UserID) =:= ID ] of
+	[undefined] ->
+	    ok = supervisor:delete_child(?MODULE, ?SRV_ID(AccountID, UserID)),
+	    start_srv(AccountID, UserID);
+	[Pid] -> {ok, Pid};
+	_Other -> start_srv(AccountID, UserID)
+    end.
 
 %%%===================================================================
 %%% Supervisor callbacks
@@ -53,14 +74,13 @@ start_shout(Media, To, Type, Port, CallID) ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    Restart = temporary,
-    Shutdown = 2000,
-    Type = worker,
+    RestartStrategy = one_for_one,
+    MaxRestarts = 1,
+    MaxSecondsBetweenRestarts = 5,
 
-    AChild = {media_shout, {media_shout, start_link, []},
-	      Restart, Shutdown, Type, [media_shout]},
+    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-    {ok, {{simple_one_for_one, 1, 2}, [AChild]}}.
+    {ok, {SupFlags, []}}.
 
 %%%===================================================================
 %%% Internal functions
