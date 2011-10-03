@@ -11,17 +11,24 @@
            (_) -> false
         end).
 
--type proplist() :: [{string() | binary() | atom(), term()} | atom(),...] | [].
+%% non-empty binary
+-type ne_binary() :: <<_:8,_:_*8>>.
+
+-type proplist_key() :: nonempty_string() | ne_binary() | atom().
+-type proplist() :: [{proplist_key(), term()} | atom(),...] | [].
 
 %% for setting types on dicts
 -type dict(K,V) :: [{K, V}].
 
 -define(EMPTY_JSON_OBJECT, {'struct', []}).
 
--type json_string() :: atom() | binary().
+-type wh_proplist() :: [{ne_binary() | atom(), binary() | atom() | integer() | float() | string()} | atom(),...] | [].
+
+-type json_string() :: atom() | ne_binary().
 -type json_number() :: integer() | float().
 -type json_array() :: [json_term(),...] | [].
--type json_object() :: {'struct', [{json_string(), json_term()},...]} | ?EMPTY_JSON_OBJECT.
+-type json_proplist() :: [{json_string(), json_term()},...] | [].
+-type json_object() :: {'struct', json_proplist()} | ?EMPTY_JSON_OBJECT.
 -type json_iolist() :: {'json', iolist()}.
 -type json_term() :: json_string() | json_number() | json_array() | json_object() | json_iolist().
 -type json_objects() :: [json_object(),...] | [].
